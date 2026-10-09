@@ -29,9 +29,13 @@ describe("Public Shop Discovery APIs", () => {
       basePrice: 3000,
     });
 
+    const uniqueSuffix = Date.now().toString(36);
+    const breezeName = `Sea Breeze ${uniqueSuffix}`;
+    const blueAreaAddress = `Blue Area ${uniqueSuffix}`;
+
     // Shop 2: Karachi
     const shopKhi = await createShop(owner.id, {
-      name: "Sea Breeze Auto Care",
+      name: breezeName,
       city: "Karachi",
       address: "Shahrah-e-Faisal",
       phone: "+922134560002",
@@ -48,9 +52,9 @@ describe("Public Shop Discovery APIs", () => {
 
     // Shop 3: Islamabad
     const shopIsb = await createShop(owner.id, {
-      name: "Margalla Auto Dynamics",
+      name: `Margalla ${uniqueSuffix}`,
       city: "Islamabad",
-      address: "Blue Area",
+      address: blueAreaAddress,
       phone: "+92512340003",
     });
 
@@ -72,24 +76,24 @@ describe("Public Shop Discovery APIs", () => {
     expect(lhrIds).not.toContain(shopKhi.id);
     expect(lhrIds).not.toContain(shopIsb.id);
 
-    // 3. Filter by search text 'breeze'
-    const searchBreeze = await getPublicShops({ q: "breeze" });
+    // 3. Filter by search text
+    const searchBreeze = await getPublicShops({ q: breezeName });
     const breezeIds = searchBreeze.map((s) => s.id);
     expect(breezeIds).toContain(shopKhi.id);
     expect(breezeIds).not.toContain(shopLhr.id);
 
-    // 4. Filter by address term 'blue area'
-    const searchAddress = await getPublicShops({ q: "blue area" });
+    // 4. Filter by address term
+    const searchAddress = await getPublicShops({ q: blueAreaAddress });
     const addressIds = searchAddress.map((s) => s.id);
     expect(addressIds).toContain(shopIsb.id);
     expect(addressIds).not.toContain(shopKhi.id);
 
     // 5. Combined city + search term
-    const combinedMatch = await getPublicShops({ city: "Karachi", q: "Sea Breeze" });
+    const combinedMatch = await getPublicShops({ city: "Karachi", q: breezeName });
     expect(combinedMatch.length).toBe(1);
     expect(combinedMatch[0].id).toBe(shopKhi.id);
 
-    const combinedMismatch = await getPublicShops({ city: "Lahore", q: "Sea Breeze" });
+    const combinedMismatch = await getPublicShops({ city: "Lahore", q: breezeName });
     expect(combinedMismatch.length).toBe(0);
   });
 
