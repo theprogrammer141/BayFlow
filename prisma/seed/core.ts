@@ -109,4 +109,5 @@ export async function seedCore(prisma: PrismaClient) {
   });
 
   console.log("✅ Core backbone seed completed successfully!");
+  return shop;
 }

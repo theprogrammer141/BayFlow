@@ -29,40 +29,14 @@ export function getEffect(key: string): EffectFn | undefined {
   return effectsRegistry.get(key);
 }
 
-/**
- * Idempotent release of allocated parts back to stock on cancellation.
- */
-export async function releaseBookingAllocations(
-  tx: Prisma.TransactionClient,
-  bookingId: string
-): Promise<void> {
-  const allocations = await tx.allocation.findMany({
-    where: {
-      bookingId,
-      releasedAt: null,
-    },
-  });
-
-  for (const alloc of allocations) {
-    await tx.part.update({
-      where: { id: alloc.partId },
-      data: { quantity: { increment: alloc.quantity } },
-    });
-
-    await tx.allocation.update({
-      where: { id: alloc.id },
-      data: { releasedAt: new Date() },
-    });
-  }
-}
-
 // -------------------------------------------------------------
 // Core effects registration for Phase 1 (Statuses 1-6d & Cancel)
 // -------------------------------------------------------------
 
 // Row 1b: PENDING -> CANCELLED
 registerEffect("PENDING->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
+  const { releaseAllocations } = await import("./parts");
+  await releaseAllocations(tx, ctx.booking.id);
 });
 
 // Row 2: CONFIRMED -> ASSIGNED (Set technicianId)
@@ -198,37 +172,6 @@ registerEffect("ESTIMATE_REJECTED->ESTIMATE_REVIEW", async (tx, ctx) => {
 });
 
 // Pre-IN_REPAIR cancellation transitions (Rows 1b, 6d and pre-repair cancellations)
-registerEffect("ESTIMATE_REJECTED->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("CONFIRMED->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("ASSIGNED->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("INSPECTING->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("ESTIMATE_REVIEW->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("AWAITING_CUSTOMER->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("ESTIMATE_APPROVED->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("PARTS_PENDING->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("PARTS_ORDERED->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-registerEffect("PARTS_READY->CANCELLED", async (tx, ctx) => {
-  await releaseBookingAllocations(tx, ctx.booking.id);
-});
-
 // Row 7: ESTIMATE_APPROVED -> PARTS_PENDING (Set partsPersonId)
 registerEffect("ESTIMATE_APPROVED->PARTS_PENDING", async (tx, ctx) => {
   const partsPersonId = (ctx.payload?.partsPersonId as string) || undefined;

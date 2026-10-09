@@ -7,10 +7,13 @@ import {
   ForbiddenError,
   NotFoundError,
   ValidationError,
+  ConflictError,
 } from "@/lib/errors";
 import type { BookingStatus, ActorRole } from "@/lib/contracts/common";
 import type { AuthUser } from "@/lib/auth/types";
 import type { Booking, BookingHistory } from "@/generated/prisma/client";
+import "@/lib/state/effects";
+import "@/lib/state/effects/parts";
 
 export interface TransitionBookingParams {
   bookingId: string;
@@ -34,7 +37,21 @@ export async function transitionBooking({
   note,
   payload,
 }: TransitionBookingParams): Promise<TransitionBookingResult> {
-  return db.$transaction(async (tx) => {
+  return db.$transaction((tx) =>
+    transitionBookingInTransaction(tx, { bookingId, to, actor, note, payload })
+  );
+}
+
+export async function transitionBookingInTransaction(
+  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  {
+    bookingId,
+    to,
+    actor,
+    note,
+    payload,
+  }: TransitionBookingParams
+): Promise<TransitionBookingResult> {
     // 1. Load booking with related records needed for guards and effects
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
@@ -178,10 +195,26 @@ export async function transitionBooking({
           }
           break;
         }
+
+        case "HAS_PARTS_SHORTAGE_AND_PO_CREATED":
+        case "EVERY_REQUIRED_PART_IN_STOCK":
+        case "ALL_PO_ITEMS_FULLY_RECEIVED":
+        case "STOCK_SUFFICIENT":
+          break;
       }
     }
 
     // 5. Apply registered transition effect
+    if (from === "PARTS_READY" && to === "IN_REPAIR") {
+      const claimed = await tx.booking.updateMany({
+        where: { id: booking.id, status: "PARTS_READY" },
+        data: { status: to },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError("Booking is no longer ready for parts allocation");
+      }
+    }
+
     const effectKey = `${from}->${to}`;
     const effect = getEffect(effectKey);
     if (effect) {
@@ -220,11 +253,10 @@ export async function transitionBooking({
       actor,
     });
 
-    return {
-      booking: updatedBooking,
-      history,
-      from,
-      to,
-    };
-  });
+  return {
+    booking: updatedBooking,
+    history,
+    from,
+    to,
+  };
 }
