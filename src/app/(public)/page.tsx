@@ -79,7 +79,7 @@ export default function HomePage() {
   return (
     <div className="space-y-10 pb-16">
       {/* Hero section */}
-      <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-muted/50 via-background to-background py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden border-b border-border bg-linear-to-b from-muted/50 via-background to-background py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl text-center space-y-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
             <ShieldCheck className="size-3.5" />
