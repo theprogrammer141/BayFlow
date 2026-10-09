@@ -99,6 +99,16 @@ export function handle<TBody = void, TQuery = void, TParams = void, TResult = un
         { status: options?.status ?? 200 }
       );
     } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "digest" in error &&
+        typeof (error as { digest: unknown }).digest === "string" &&
+        (error as { digest: string }).digest.startsWith("NEXT_")
+      ) {
+        throw error;
+      }
+
       if (error instanceof AppError) {
         return NextResponse.json(error.toResponse(), { status: error.statusCode });
       }
