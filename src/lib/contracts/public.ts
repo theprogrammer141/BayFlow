@@ -27,6 +27,7 @@ export const PublicShopSchema = z.object({
   workEnd: z.string(),
   slotMinutes: z.number().int().positive(),
   slotCapacity: z.number().int().positive(),
+  rating: z.number().optional(),
   services: z.array(PublicServiceItemSchema).optional(),
 });
 export type PublicShop = z.infer<typeof PublicShopSchema>;

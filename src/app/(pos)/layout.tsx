@@ -40,6 +40,13 @@ export default function PosLayout({
 
           <nav className="hidden md:flex items-center gap-1 text-xs font-semibold">
             <Link
+              href="/owner"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <Building2 className="size-3.5" />
+              Owner
+            </Link>
+            <Link
               href="/sa"
               className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >

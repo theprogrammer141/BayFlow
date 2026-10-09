@@ -104,6 +104,9 @@ export async function login(data: LoginRequest): Promise<{ user: AuthUser; token
           },
         },
       },
+      ownedShops: {
+        select: { id: true },
+      },
     },
   });
 
@@ -114,6 +117,11 @@ export async function login(data: LoginRequest): Promise<{ user: AuthUser; token
   const isValidPassword = await verifyPassword(data.password, user.passwordHash);
   if (!isValidPassword) {
     throw new UnauthenticatedError("Invalid email or password");
+  }
+
+  // Deactivated staff check: staff with no active memberships and no owned shops cannot authenticate
+  if (!user.isCustomer && user.memberships.length === 0 && user.ownedShops.length === 0) {
+    throw new UnauthenticatedError("Account is deactivated or has no active shop memberships");
   }
 
   const authUser: AuthUser = {
@@ -155,11 +163,18 @@ export async function getMe(userId: string): Promise<AuthUser> {
           },
         },
       },
+      ownedShops: {
+        select: { id: true },
+      },
     },
   });
 
   if (!user || !user.isActive) {
     throw new UnauthenticatedError("User not found or inactive");
+  }
+
+  if (!user.isCustomer && user.memberships.length === 0 && user.ownedShops.length === 0) {
+    throw new UnauthenticatedError("Account is deactivated or has no active shop memberships");
   }
 
   return {
