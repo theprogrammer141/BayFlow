@@ -88,7 +88,7 @@ interface BookingDetail {
   }>;
 }
 
-export default function CustomerBookingDetailPage() {
+function CustomerBookingDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const bookingId = params.id as string;
@@ -526,3 +526,20 @@ export default function CustomerBookingDetailPage() {
     </div>
   );
 }
+
+export default function CustomerBookingDetailPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="space-y-6">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+        </div>
+      }
+    >
+      <CustomerBookingDetailPageContent />
+    </React.Suspense>
+  );
+}
+
