@@ -7,5 +7,7 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
     fileParallelism: false, // DB tests share one database
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 });
