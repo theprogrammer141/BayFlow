@@ -1,0 +1,325 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  SERVICE_ADVISOR
+  TECHNICIAN
+  QC_INSPECTOR
+  PARTS_PERSON
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  WAITING_FOR_PARTS
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+}
+
+enum EstimateItemType {
+  PART
+  LABOUR
+}
+
+enum POStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  isCustomer   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedShops          Shop[]          @relation("ShopOwner")
+  memberships         Membership[]
+  vehicles            Vehicle[]
+  customerBookings    Booking[]       @relation("BookingCustomer")
+  technicianBookings  Booking[]       @relation("BookingTechnician")
+  partsBookings       Booking[]       @relation("BookingPartsPerson")
+  qcBookings          Booking[]       @relation("BookingQcInspector")
+  historyEntries      BookingHistory[] @relation("HistoryActor")
+  createdPurchaseOrders PurchaseOrder[] @relation("PurchaseOrderCreator")
+  raisedQcIssues      QcIssue[]       @relation("QcIssueActor")
+  notifications       Notification[]
+}
+
+model Shop {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  address     String
+  city        String
+  phone       String
+  logoUrl     String?
+  workStart   String
+  workEnd     String
+  slotMinutes Int
+  slotCapacity Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner          User            @relation("ShopOwner", fields: [ownerId], references: [id])
+  memberships    Membership[]
+  services       Service[]
+  slots          Slot[]
+  bookings       Booking[]
+  parts          Part[]
+  purchaseOrders PurchaseOrder[]
+  allocations    Allocation[]
+  notifications  Notification[]
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  shopId    String
+  role      Role
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([userId, shopId])
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  shopId      String
+  name        String
+  description String?
+  estMinutes  Int
+  basePrice   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shop            Shop             @relation(fields: [shopId], references: [id])
+  bookingServices BookingService[]
+
+  @@unique([shopId, name])
+}
+
+model Slot {
+  id        String   @id @default(cuid())
+  shopId    String
+  startsAt  DateTime
+  capacity  Int
+  booked    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  shop     Shop      @relation(fields: [shopId], references: [id])
+  bookings Booking[]
+
+  @@unique([shopId, startsAt])
+}
+
+model Vehicle {
+  id        String   @id @default(cuid())
+  ownerId   String
+  regNo     String
+  make      String
+  model     String
+  year      Int
+  color     String?
+  mileage   Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User      @relation(fields: [ownerId], references: [id])
+  bookings Booking[]
+
+  @@unique([ownerId, regNo])
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  shopId         String
+  customerId     String
+  vehicleId      String
+  slotId         String
+  status         BookingStatus @default(PENDING)
+  customerNotes  String?
+  technicianId   String?
+  partsPersonId  String?
+  qcInspectorId  String?
+  readyNotifiedAt DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  shop        Shop  @relation(fields: [shopId], references: [id])
+  customer    User  @relation("BookingCustomer", fields: [customerId], references: [id])
+  vehicle     Vehicle @relation(fields: [vehicleId], references: [id])
+  slot        Slot  @relation(fields: [slotId], references: [id])
+  technician  User? @relation("BookingTechnician", fields: [technicianId], references: [id])
+  partsPerson User? @relation("BookingPartsPerson", fields: [partsPersonId], references: [id])
+  qcInspector User? @relation("BookingQcInspector", fields: [qcInspectorId], references: [id])
+
+  services       BookingService[]
+  history        BookingHistory[]
+  estimate       Estimate?
+  purchaseItems  PurchaseOrderItem[]
+  allocations    Allocation[]
+  qcIssues       QcIssue[]
+  notifications  Notification[]
+}
+
+model BookingService {
+  id        String @id @default(cuid())
+  bookingId String
+  serviceId String
+  quantity  Int    @default(1)
+  unitPrice Int
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([bookingId, serviceId])
+}
+
+model BookingHistory {
+  id         String        @id @default(cuid())
+  bookingId  String
+  fromStatus BookingStatus?
+  toStatus   BookingStatus
+  actorId    String
+  note       String?
+  createdAt  DateTime      @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actor   User    @relation("HistoryActor", fields: [actorId], references: [id])
+}
+
+model Estimate {
+  id         String   @id @default(cuid())
+  bookingId  String   @unique
+  revision   Int      @default(1)
+  total      Int
+  sentAt     DateTime?
+  approvedAt DateTime?
+  rejectedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  booking Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  items   EstimateItem[]
+}
+
+model EstimateItem {
+  id        String          @id @default(cuid())
+  estimateId String
+  type      EstimateItemType
+  partId    String?
+  name      String
+  quantity  Int
+  unitCost  Int
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  part     Part?    @relation(fields: [partId], references: [id])
+}
+
+model Part {
+  id           String   @id @default(cuid())
+  shopId       String
+  sku          String
+  name         String
+  quantity     Int      @default(0)
+  reorderLevel Int      @default(0)
+  cost         Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shop              Shop                @relation(fields: [shopId], references: [id])
+  estimateItems     EstimateItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  allocations       Allocation[]
+
+  @@unique([shopId, sku])
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  shopId      String
+  status      POStatus @default(DRAFT)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shop      Shop                @relation(fields: [shopId], references: [id])
+  createdBy User                @relation("PurchaseOrderCreator", fields: [createdById], references: [id])
+  items     PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  partId          String
+  bookingId       String?
+  qtyOrdered      Int
+  qtyReceived     Int    @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  part          Part          @relation(fields: [partId], references: [id])
+  booking       Booking?      @relation(fields: [bookingId], references: [id])
+}
+
+model Allocation {
+  id         String   @id @default(cuid())
+  shopId     String
+  bookingId  String
+  partId     String
+  quantity   Int
+  releasedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  shop    Shop    @relation(fields: [shopId], references: [id])
+  booking Booking @relation(fields: [bookingId], references: [id])
+  part    Part    @relation(fields: [partId], references: [id])
+}
+
+model QcIssue {
+  id          String   @id @default(cuid())
+  bookingId   String
+  raisedById  String
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  raisedBy User   @relation("QcIssueActor", fields: [raisedById], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  shopId    String?
+  bookingId String?
+  type      String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop    Shop?    @relation(fields: [shopId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+}
