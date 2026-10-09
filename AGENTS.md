@@ -1,204 +1,299 @@
-# AGENTS.md: BayFlow
+# Bayflow
 
-Instructions for AI coding agents (Claude Code, Cursor, Copilot, Antigravity, etc.) working in this repo. Read this file and `project-doc.md` **before every task**.
+Bayflow is a multi-tenant vehicle-service platform. Customers book services, and each shop manages its own team, estimates, parts, repairs, and quality checks.
 
-## 0. Prime directives
+The booking state machine defines what can happen next. The server enforces who can do it. The database records what happened.
 
-1. **`project-doc.md` is the source of truth.** Do not invent features, statuses, roles or endpoints. If the spec is wrong or missing something, stop and propose a change to `project-doc.md` (and add a row to its Decision Log) instead of silently diverging.
-2. **Spec first, then plan, then code.** For every task: read the relevant spec section, write a short plan (files to touch, tests to add), wait for human approval when the plan touches a shared area (section 5), then implement.
-3. **Core before bonus.** Do not start calling or the AI Front Desk until a human confirms the full core flow works on the live URL.
-4. **A smaller, correct, deployed product beats a large broken one.** Prefer the simplest thing that satisfies the spec.
-5. **The human must be able to explain every line.** Keep code small and readable; leave brief comments only where logic is non-obvious (state machine guards, tenancy, transactions).
+`project-doc.md` explains the product and the decisions behind it. This file contains the rules agents must follow.
 
-## 1. Stack
+## Stack
 
-| Layer | Choice |
-|---|---|
-| App | Next.js (App Router) + TypeScript (`strict`) |
-| DB | PostgreSQL (Supabase), accessed server-side through Prisma only |
-| ORM | Prisma |
-| Validation | Zod (shared schemas in `src/lib/contracts/`) |
-| Auth | bcryptjs + JWT (`jose`) in httpOnly cookie |
-| UI | Tailwind + shadcn/ui |
-| Client data | TanStack Query (or SWR), polling about 10 s |
-| Tests | Vitest |
-| Deploy | Vercel (production deploys from `main` only) |
+Next.js App Router, TypeScript strict, PostgreSQL on Supabase, Prisma 7, Zod, bcryptjs, `jose`, Tailwind, shadcn/ui, TanStack Query or SWR, and Vitest. Vercel hosts the application.
 
-Do not add new dependencies without saying why in the PR description. Do not introduce a second state library, ORM, or UI kit.
+Prisma is the only database access layer. Authentication uses our own JWT-based session system, not Supabase Auth.
 
-## 2. Commands
+Use the APIs supported by the versions installed in this repository. When uncertain, consult the installed package's documentation rather than guessing.
 
-```bash
-npm install                   # install
-cp .env.example .env          # then fill in values
-npm run db:migrate            # prisma migrate dev + generate (uses DIRECT_URL)
-npm run db:seed               # seed demo data (3+ shops, all roles)
-npm run dev                   # run locally at http://localhost:3000
-npm test                      # Vitest (state machine, tenancy, slots)
-npm run lint && npm run typecheck   # must pass before every commit
-npm run build                 # must pass before merging to main
-```
+## How we work
 
-If a command above does not exist yet, create it in `package.json` as part of the first task that needs it.
+Spec driven. Nothing gets built without a specification.
 
-## 3. Project structure
+- `project-doc.md` — the product, its behavior, and the decisions behind it.
+- `docs/specs/phase-NN.md` — the scope and acceptance checks for the phase being built.
+- `AGENTS.md` — rules that apply to every task.
 
-```
+**Starting a task.** Read this file and the relevant sections of `project-doc.md` and the phase spec, if one exists. Write a plan of at most 15 lines describing the approach, files likely to change, tests, and any ambiguity. Wait for human approval before changing critical shared files or making a change that contradicts the specification.
+
+**Building a phase.** Work in small, ordered parts. For each part, implement it, run `npm run lint && npm run typecheck && npm test`, and commit before proceeding. A failing check stops progression; don't build on top of a red result.
+
+**Dropped into an unfamiliar repository?** Inspect the available phase specs and recent Git history. Establish what exists and what was last verified before continuing. Don't assume a feature works just because its files exist.
+
+**The human owns browser acceptance.** Build the specified behavior and verify what can be checked from the terminal. Don't install browser automation or test infrastructure just to perform manual acceptance checks. Tell the human exactly what to verify in the browser.
+
+**When the spec is ambiguous, stop before building.** State what is known, what is unclear, and which option you recommend. Explain why. Product decisions belong in `project-doc.md`, with a Decision Log entry in section 12.1 when required.
+
+**When something fails, say so.** Never weaken a check, hide a failure, or claim a deployment or browser flow works without verifying it.
+
+## How to talk to me
+
+Keep it short. If a sentence isn't telling me something I need, cut it.
+
+Ask with a recommendation: “A or B; I'd choose B because it preserves the transaction boundary.”
+
+When only the human can provide something—a secret, external configuration, or approval—say exactly what is needed and where it belongs, then stop that part of the work.
+
+At completion, report what changed, what was actually verified, what remains blocked, and what the human should check. Don't repeat the entire plan or list every file touched.
+
+Use plain English. Explain important decisions, not routine syntax.
+
+## How the code is laid out
+
+Choose the file structure when the specification leaves room for it. These boundaries are about behavior, not personal ownership.
+
+```text
 src/
   app/
-    (public)/                 # landing, shop pages, booking wizard
-    (customer)/               # customer dashboard
-    (pos)/                    # shop POS: owner, sa, technician, parts, qc
-    api/                      # thin route handlers only
+    (public)/                 # Landing, shop pages, booking wizard
+    (customer)/               # Customer dashboard
+    (pos)/                    # Owner, SA, technician, parts, QC
+    api/                      # Thin route handlers
   lib/
-    auth/                     # hashing, JWT, session, requireRole()
-    tenancy/                  # withShopScope(), requireMembership()
-    state/                    # transitions table + transitionBooking()
-    services/                 # business logic: bookings, estimates, inventory, po, qc, notifications
-    contracts/                # Zod schemas and inferred types (API contract)
+    auth/                     # Passwords, JWT, sessions, role guards
+    tenancy/                  # Shop membership and scoping
+    state/                    # Transition table and transition engine
+    services/                 # Domain logic and database operations
+    contracts/                # Shared Zod schemas and inferred types
     db.ts                     # Prisma client
   components/
-    ui/                       # shared primitives (shadcn)
-    ...                       # feature components per role
+    ui/                       # Shared UI primitives
+    ...                       # Feature components
 prisma/
   schema.prisma
   seed.ts
-tests/                        # unit and integration tests
-docs/                         # optional diagrams, API docs
-project-doc.md  AGENTS.md  README.md  .env.example
+  seed/                       # Modular seed data
+tests/
+docs/
+project-doc.md
+AGENTS.md
+README.md
+.env.example
 ```
 
-## 4. Architecture rules (non-negotiable)
+Route handlers translate HTTP requests into service calls. Components render interfaces. Services enforce business rules and perform domain database operations.
 
-### 4.1 Layering
-- Route handlers do only: authenticate, validate input with Zod, call a service, map errors to HTTP. **No business logic or direct Prisma calls in route handlers or React components.**
-- All business logic lives in `src/lib/services/*`. Services take an explicit `actor` (user + role + shopId) and are the only place that talks to Prisma for domain data.
+## Architecture rules
 
-### 4.2 Multi-tenancy
-- Every shop-owned query goes through `withShopScope(shopId)` or an equivalent helper that also verifies the caller's Membership.
-- Never trust a `shopId` from the request body for authorization. Use the authenticated Membership or the booking's own `shopId`.
-- Never write a query on shop-owned tables (`Booking`, `Slot`, `Part`, `PurchaseOrder`, `Service`, `Membership`, `Allocation`, ...) without a `shopId` filter.
-- Cross-shop access returns **403 or 404**. Every new shop-scoped endpoint needs a tenancy test.
+### 1. The specification owns product behavior
 
-### 4.3 State machine
-- Statuses and transitions are defined **only** in `src/lib/state/transitions.ts` as data (`from`, `to`, `roles`, `guard`, `notify`).
-- **All status changes go through `transitionBooking(...)`.** Never write `booking.status` anywhere else.
-- `transitionBooking` runs in a single DB transaction: validate transition, validate role and assignee guard, apply side effects, write `BookingHistory`, create notifications.
-- Errors: `409 INVALID_TRANSITION`, `403 FORBIDDEN_ACTION`. Do not add shortcut transitions.
-- The table in `project-doc.md` section 4.1 and `transitions.ts` must match exactly. Changing one means changing the other in the same PR.
+`project-doc.md` is the source of truth for features, roles, statuses, transitions, and API behavior.
 
-### 4.4 Transactions and concurrency
-Use `prisma.$transaction` for: booking creation with slot capacity, any transition, PO receive, allocation, cancellation release, QC pick. Required patterns:
-- Slot capacity: lock or conditional update (`booked < capacity`) inside the transaction.
-- QC pick: conditional update `WHERE status = 'QC_PENDING'`; if zero rows updated, return `409`.
-- Stock never goes negative; reject with `409 CONFLICT`.
+Never invent a status, role, endpoint, permission, or workflow to fill a gap. If implementation and specification disagree, stop and propose a documented decision. If a change is approved, update the specification and its Decision Log in the same change.
 
-### 4.5 Validation and errors
-- Zod on every endpoint input. Types come from `z.infer`, not hand-written duplicates.
-- Error shape is always `{ error: { code, message, details? } }`. Use the correct HTTP status.
-- Money is integer PKR. Never use floats for money.
+Build only what the current phase requires. No speculative scaffolding for later phases.
 
-### 4.6 Security
-- bcryptjs (bcrypt algorithm) for passwords; never log passwords, tokens or full request bodies.
-- Cookies: httpOnly, SameSite=Lax, Secure in production.
-- No secrets in code or commits. All config comes from env vars listed in `.env.example`.
-- Demo credentials appear in `README.md` and seed data only, never in application logic.
+### 2. Business logic lives in services
 
-### 4.7 Supabase usage
-- Supabase is used **only as managed PostgreSQL**. All data access goes through Prisma on the server. Do not add `@supabase/supabase-js`, the anon key, Supabase Auth, or client-side DB access.
-- Prisma 7 setup: `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`) is used **at runtime** through the `@prisma/adapter-pg` driver adapter in `src/lib/db.ts`; `DIRECT_URL` (direct or session-pooler connection) is used by the **Prisma CLI** only, configured in `prisma.config.ts`. `schema.prisma` has no `url` or `directUrl`; the generator is `prisma-client` with output `src/generated/prisma` (gitignored, created by `npm run db:generate` and `postinstall`). Always import the client via `@/lib/db`. See `docs/SETUP.md`.
-- Tenant isolation stays in the application layer (`withShopScope`). Because the API is never exposed via Supabase's auto-generated REST API, enable RLS on all tables with no policies (deny by default) so nothing is reachable through PostgREST by accident.
-- The service-role key and DB password are secrets: never commit them or expose them to the browser.
+Route handlers authenticate, validate inputs with Zod, call a service, and map the result or error to HTTP.
 
-### 4.8 Frontend
-- One centralized API client (`src/lib/api-client.ts`) that unwraps `{ data }` and throws typed errors. No raw `fetch` scattered in components.
-- Reusable components in `src/components/`; role dashboards only show that role's work.
-- Every data view has loading, empty and error states. Customer portal is mobile first.
-- Notifications: poll `GET /api/notifications` about every 10 s; bell shows unread count.
+React components do not contain business logic or access Prisma. Route handlers do not contain domain logic or issue direct Prisma queries.
 
-## 5. Ownership and shared files
+Domain services live in `src/lib/services/`. They receive an explicit, server-derived actor containing the authenticated user and the applicable role and shop context.
 
-Three humans work in parallel, each with their own agent. Respect ownership to avoid conflicts.
+A request body is input, not proof of identity or authority.
 
-| Member | Owns |
-|---|---|
-| **A** (core/backend lead) | `prisma/schema.prisma` and migrations, `lib/auth`, `lib/tenancy`, `lib/state`, notifications service/API, Owner module, CI, deployment, tests for state machine and tenancy |
-| **B** (customer + advisor) | `(public)`, `(customer)`, SA pages under `(pos)/sa`, slot logic, booking creation, notification bell, `README.md`, `.env.example` |
-| **C** (shop floor) | Technician, Parts, QC pages under `(pos)`, inventory/PO/QC services, `prisma/seed.ts` (index of modular seeds in `prisma/seed/`), and the transition effect files `src/lib/state/effects/parts.ts` and `qc.ts` (registered via A's effects registry; C never edits the engine or `transitions.ts`) |
+### 3. Shop boundaries are enforced on the server
 
-**Frozen files (only Member A edits):** `prisma/schema.prisma`, `prisma/migrations/*`, `src/lib/state/transitions.ts`. If your task needs a change, **stop and ask the human to request it from Member A**. Do not edit them yourself.
+Every shop-owned operation must verify the caller's membership and scope its database access to the correct shop.
 
-**Shared files** (`src/components/ui/*`, `package.json`, `src/lib/contracts/*`): keep edits minimal and additive; pull before editing; one person at a time.
+Never trust a client-supplied `shopId` for authorization. Resolve the shop from the authenticated membership or persisted booking, as appropriate to the operation.
 
-Before editing a file outside your ownership, ask the human.
+Never query shop-owned data without a shop scope. This includes bookings, slots, parts, purchase orders, services, memberships, and allocations.
 
-## 6. Workflow per task
+Cross-shop access returns `403` or `404`, according to the endpoint contract. Every new shop-scoped operation needs a tenancy test.
 
-1. **Read:** `project-doc.md` section(s) relevant to the task, plus this file.
-2. **Plan:** list files to create/change, tests to add, and any spec ambiguity. Keep it under 15 lines. Wait for approval if the plan touches frozen/shared files or changes behavior vs the spec.
-3. **Implement** in small steps on your own branch.
-4. **Test:** add or update tests (section 7), then run `npm run lint && npm run typecheck && npm test`.
-5. **Verify** the behavior against the Definition of Done items it touches (`project-doc.md` section 10).
-6. **Commit** (section 8) and open a small PR to `main`.
-7. **Report:** summarize what changed, what was verified, and any spec gaps or follow-ups. Do not claim something works unless you ran it.
+A correctly filtered UI is not a security boundary. The API must reject unauthorized requests even when called directly.
 
-## 7. Testing requirements
+### 4. One state machine owns booking transitions
 
-Write tests for the things judges and the spec care about most:
+`src/lib/state/transitions.ts` is the authoritative transition table. It defines `from`, `to`, permitted roles, guards, and notification requirements as data.
 
-- **State machine:** every valid transition succeeds for the right role; every invalid transition returns `409`; wrong role or wrong assignee returns `403`; history and notifications are written.
-- **Tenancy:** a Shop A staff token gets 403/404 on Shop B bookings, parts, POs and team.
-- **Slots:** two concurrent bookings cannot exceed capacity.
-- **Inventory:** receive increases stock; allocate decreases; cancel releases; stock never negative; partial receive keeps `PARTS_ORDERED`.
-- **QC:** only the first picker wins; fail requires an issue and returns to the same technician; loop repeats.
-- **Estimate:** revision increments on SA edit and on reject-revise; total recomputed server-side.
+All booking status changes go through `transitionBooking(...)`. No other code writes `booking.status`.
 
-Do not write tests that only assert mocks. Prefer integration tests against a test database for services.
+The transition engine validates the transition, role, and applicable assignment guards; applies required effects; records `BookingHistory`; and creates required notification records in one database transaction.
 
-## 8. Git conventions
+Invalid transitions return `409 INVALID_TRANSITION`. Unauthorized actions return `403 FORBIDDEN_ACTION`. Do not introduce shortcut transitions.
 
-- Branch per member per slice: `a/auth-tenancy`, `b/booking-wizard`, `c/qc-loop`.
-- Commit messages: `feat:`, `fix:`, `chore:`, `test:`, `docs:` prefix; imperative, under 72 chars. Small, frequent commits so history is meaningful.
-- Merge to `main` at least hourly; `main` must always build. Production deploys from `main` only.
-- Never commit `.env`, secrets, `node_modules`, or build output.
-- Never force-push `main`.
+The transition table in `project-doc.md` section 4.1 and `transitions.ts` must match exactly. A change to either requires a corresponding change to the other in the same approved change.
 
-## 9. Things agents must NOT do
+### 5. Transactions protect business invariants
 
-- Do not write `booking.status` outside `transitionBooking`.
-- Do not query shop-owned data without a shop scope.
-- Do not trust client-supplied role, `shopId`, or price totals for authorization or calculation.
-- Do not put business logic in route handlers or components.
-- Do not hard-code demo credentials or secrets.
-- Do not add features, statuses or roles that are not in `project-doc.md`.
-- Do not edit frozen files (section 5) or another member's folders without human approval.
-- Do not start bonus features before core passes the Definition of Done.
-- Do not leave `TODO` stubs that silently pass; either implement or raise it in the report.
-- Do not disable lint, type checks or tests to make something pass.
-- Do not invent test results or claim deployment success without checking the live URL.
+Operations that must succeed or fail together belong in a database transaction.
 
-## 10. Definition of done for any PR
+This includes booking creation with slot capacity, booking transitions, purchase-order receiving, inventory allocation, cancellation-related stock release, and QC picking.
 
-- [ ] Matches `project-doc.md` (or the doc is updated in the same PR with a Decision Log entry).
-- [ ] `npm run lint`, `npm run typecheck`, `npm test` pass; `npm run build` passes for PRs to `main`.
-- [ ] Inputs validated with Zod; errors use the standard shape and correct status.
-- [ ] Shop-scoped code has a tenancy test; transitions have role and invalid-transition tests.
-- [ ] No secrets, no stray debug logging, no unused code.
-- [ ] Works on the deployed preview or production URL when it touches user-facing flows.
-- [ ] PR description lists what changed, how it was verified, and open questions.
+- **Slots:** claim capacity atomically, using a lock or conditional update that prevents `booked` from exceeding `capacity`.
+- **Inventory:** stock never goes negative. Reject operations that would violate this invariant with `409 CONFLICT`.
+- **QC:** claim a booking conditionally while its status is `QC_PENDING`. If no row is updated, return `409`.
+- **History and notifications:** persist required records in the same transaction as the operation they describe.
 
-## 11. Quick reference: roles and status ownership
+External email, SMS, and push delivery do not belong inside a database transaction. If reliable delivery and retries become necessary, use a transactional outbox. Creating an in-app notification record is not proof that an external message was delivered.
 
-| Status | Responsible role |
-|---|---|
-| `PENDING`, `CONFIRMED`, `ESTIMATE_REVIEW`, `ESTIMATE_APPROVED`, `READY_FOR_PICKUP` | Service Advisor |
-| `ASSIGNED`, `INSPECTING`, `IN_REPAIR` | Technician |
-| `AWAITING_CUSTOMER` | Customer |
-| `PARTS_PENDING`, `PARTS_ORDERED`, `PARTS_READY` | Parts Person |
-| `QC_PENDING`, `QC_IN_PROGRESS` | QC Inspector (any in shop; first picker locks) |
-| `ESTIMATE_REJECTED` | Service Advisor (revise or cancel) |
-| `COMPLETED`, `CANCELLED` | Terminal |
+### 6. Validation, errors, and money
 
-## 12. When in doubt
+Every endpoint validates its input with Zod. Infer types from schemas with `z.infer` instead of maintaining duplicate handwritten definitions.
 
-Ask the human. State what you know, what is ambiguous, and your recommended default. Spec ambiguities are logged in `project-doc.md` section 12.1.
+Errors follow this shape:
+
+```ts
+{
+  error: {
+    code: string,
+    message: string,
+    details?: unknown
+  }
+}
+```
+
+Use the HTTP status required by the error contract. Don't leak internal exceptions or sensitive details.
+
+Money is integer PKR. Never use floating-point arithmetic for monetary totals, and never trust a client-calculated estimate total. Recalculate totals on the server.
+
+### 7. Authentication and secrets
+
+Passwords use bcryptjs with the bcrypt algorithm. Sessions use JWTs through `jose`, stored in secure HttpOnly cookies.
+
+Cookies use `SameSite=Lax` and `Secure` in production. Never log passwords, tokens, or full request bodies that may contain sensitive data.
+
+Secrets come from environment variables documented in `.env.example`. Never commit credentials or expose server secrets to browser code.
+
+Demo credentials belong in the README and seed data only, never in application logic.
+
+### 8. Supabase and Prisma
+
+Supabase provides managed PostgreSQL. It is not Bayflow's authentication provider or application data API.
+
+All database access goes through Prisma on the server. Do not introduce `@supabase/supabase-js`, Supabase Auth, the anon key, or client-side database access.
+
+Prisma 7 uses the `prisma-client` generator with output at `src/generated/prisma`. The generated directory is ignored by Git and must be produced by `npm run db:generate` and the configured `postinstall` workflow.
+
+`schema.prisma` has no `url` or `directUrl`. `prisma.config.ts` configures the CLI's database connection using `DIRECT_URL`.
+
+At runtime, `src/lib/db.ts` constructs the Prisma client using `@prisma/adapter-pg` and `DATABASE_URL`. Use the transaction pooler for runtime connections when configured for that purpose; use a direct or supported session-pooler connection for CLI operations. Follow the actual connection details in `docs/SETUP.md`.
+
+Always import the client through `@/lib/db`, not from generated files directly in application code.
+
+Enable RLS on database tables without adding permissive policies. Tenant authorization remains in the application layer through membership checks and scoped queries. RLS is a deny-by-default safeguard against accidental exposure through PostgREST; it does not replace application authorization.
+
+Database passwords and service-role keys are secrets. Never commit them or expose them to the browser.
+
+### 9. Frontend behavior
+
+Use `src/lib/api-client.ts` as the centralized API client. It unwraps `{ data }` and throws typed errors. Don't scatter raw `fetch` calls across components.
+
+Use shared UI components. Each data view has loading, empty, and error states. The customer portal is mobile-first, and each dashboard shows only the work relevant to its role.
+
+Notifications use `GET /api/notifications`, polled approximately every 10 seconds. The bell displays the unread count. Avoid unnecessary polling and repeated database reads.
+
+## Shared and critical files
+
+The codebase has shared files and changes that can affect multiple features. Freedom to choose implementation details does not mean freedom to break established contracts.
+
+**Database schema and migrations.** Changes to `prisma/schema.prisma` or `prisma/migrations/` can affect every module. Before changing them, explain why the change is needed, identify affected services and tests, and wait for human approval.
+
+**State machine.** Changes to `src/lib/state/transitions.ts` affect every role and workflow. Propose the matching change to `project-doc.md` section 4.1 and wait for approval before implementing it.
+
+**Shared contracts and components.** Keep changes to `src/lib/contracts/`, `src/components/ui/`, and `package.json` focused. Check existing usage before changing shared interfaces or behavior. Explain breaking changes and wait for approval.
+
+**Other files.** Choose the structure and implementation freely when they fit the spec and architecture rules. Coordinate if another active task is modifying the same code. Preserve existing work; never overwrite it without understanding the impact.
+
+## Commands
+
+```bash
+npm install
+cp .env.example .env
+npm run db:migrate
+npm run db:seed
+npm run dev
+npm test
+npm run lint && npm run typecheck
+npm run build
+```
+
+The development server runs at `http://localhost:3000`.
+
+`db:migrate` uses `DIRECT_URL`; `db:seed` loads demo data, including at least three shops and the required roles. `lint`, `typecheck`, and `test` must pass before each commit. `build` must pass before merging to `main`.
+
+If a required script does not exist, inspect the existing scripts and package configuration first. Add the missing command as part of the task that needs it, without introducing unrelated changes.
+
+Never claim a command passed without running it. If a database or external credential prevents verification, report the exact blocker.
+
+## Testing
+
+Test the invariants that would break the product if they were wrong.
+
+- **State machine:** permitted transitions succeed; invalid transitions return `409`; wrong roles or assignees return `403`; required history and notifications are recorded.
+- **Tenancy:** Shop A staff cannot access Shop B's bookings, parts, purchase orders, or team.
+- **Slots:** concurrent bookings never exceed capacity.
+- **Inventory:** receiving increases stock, allocation decreases it, cancellation releases stock as specified, and stock never becomes negative. Partial receiving preserves the documented status.
+- **QC:** only the first eligible picker wins; failure requires an issue and returns the booking to the specified technician; the QC loop repeats as defined.
+- **Estimates:** totals are calculated on the server; revisions increment according to the documented rules; sent estimates are locked.
+
+Prefer integration tests against a test database for service behavior. Mock-only tests do not prove database constraints, transaction behavior, or tenant isolation.
+
+Do not install a new test runner or browser driver without approval. The human performs manual browser acceptance.
+
+## Git conventions
+
+Use short-lived branches when appropriate and keep changes focused. Commit with an imperative conventional prefix: `feat:`, `fix:`, `chore:`, `test:`, or `docs:`. Keep messages under 72 characters and commits small enough to explain.
+
+Keep `main` buildable. Production deploys come from `main` only. Never force-push `main` or commit `.env`, secrets, `node_modules`, or build output.
+
+## Things agents must not do
+
+Breaking these rules is worse than leaving a task unfinished.
+
+- Never write `booking.status` outside `transitionBooking(...)`.
+- Never access shop-owned data without the required shop scope.
+- Never trust client-supplied identity, role, shop authorization, or monetary totals.
+- Never put domain logic in route handlers or React components.
+- Never invent product behavior, statuses, roles, or transitions.
+- Never change critical shared behavior without approval.
+- Never start bonus features before the human confirms the complete core flow works on the live URL.
+- Never leave TODO stubs that silently pass as implemented behavior.
+- Never disable lint, type checks, or tests to make a task appear complete.
+- Never invent test results or claim deployment success without verification.
+- Never silently work around a failed check or ambiguous requirement.
+- Never add dependencies without explaining their purpose and obtaining approval first.
+- Never perform external account setup or deployment configuration on the human's behalf when it requires their credentials or approval. State exactly what they need to do.
+
+## Definition of done
+
+A task or PR is ready when:
+
+- It matches `project-doc.md` and the current phase spec.
+- `npm run lint`, `npm run typecheck`, and `npm test` pass; `npm run build` also passes before a merge to `main`.
+- Inputs, errors, authorization, and tenant boundaries follow the rules above.
+- New shop-scoped operations have tenancy tests; new transitions have permission and invalid-transition tests.
+- No secrets, stray debug logging, unused code, or silently passing stubs remain.
+- User-facing behavior has been checked on the deployed preview or production URL when applicable, or explicitly handed to the human for acceptance.
+- The report states what changed, what was verified, what failed or remains unverified, and any open specification questions.
+
+## Quick reference: booking status ownership
+
+The role responsible for a status is not permission to transition into or out of it arbitrarily. The transition table remains authoritative.
+
+| Status                                                                             | Responsible role                             |
+| ---------------------------------------------------------------------------------- | -------------------------------------------- |
+| `PENDING`, `CONFIRMED`, `ESTIMATE_REVIEW`, `ESTIMATE_APPROVED`, `READY_FOR_PICKUP` | Service Advisor                              |
+| `ASSIGNED`, `INSPECTING`, `IN_REPAIR`                                              | Technician                                   |
+| `AWAITING_CUSTOMER`                                                                | Customer                                     |
+| `PARTS_PENDING`, `PARTS_ORDERED`, `PARTS_READY`                                    | Parts Person                                 |
+| `QC_PENDING`, `QC_IN_PROGRESS`                                                     | QC Inspector; first picker locks the booking |
+| `ESTIMATE_REJECTED`                                                                | Service Advisor; revise or cancel            |
+| `COMPLETED`, `CANCELLED`                                                           | Terminal                                     |
+
+## When in doubt
+
+Stop before guessing. Tell the human what the specification establishes, what remains ambiguous, and which option you recommend.
+
+If the ambiguity changes product behavior, record the approved decision in `project-doc.md` section 12.1 before implementing it.
