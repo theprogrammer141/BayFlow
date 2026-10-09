@@ -12,6 +12,18 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  async rewrites() {
+    return [
+      {
+        source: "/bookings",
+        destination: "/api/bookings",
+      },
+      {
+        source: "/public/:path*",
+        destination: "/api/public/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
