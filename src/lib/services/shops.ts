@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { requireMembership } from "@/lib/tenancy/membership";
 import { hashPassword } from "@/lib/auth/password";
 import { ForbiddenError, NotFoundError, ConflictError } from "@/lib/errors";
 import type { AuthUser } from "@/lib/auth/types";
@@ -91,7 +92,7 @@ export async function updateShop(
 }
 
 export async function getTeamMembers(actor: AuthUser, shopId: string) {
-  await requireShopOwner(actor, shopId);
+  requireMembership(actor, shopId, ["OWNER", "SERVICE_ADVISOR"]);
 
   return db.membership.findMany({
     where: { shopId },

@@ -197,8 +197,35 @@ registerEffect("ESTIMATE_REJECTED->ESTIMATE_REVIEW", async (tx, ctx) => {
   }
 });
 
-// Row 6d: ESTIMATE_REJECTED -> CANCELLED
+// Pre-IN_REPAIR cancellation transitions (Rows 1b, 6d and pre-repair cancellations)
 registerEffect("ESTIMATE_REJECTED->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("CONFIRMED->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("ASSIGNED->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("INSPECTING->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("ESTIMATE_REVIEW->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("AWAITING_CUSTOMER->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("ESTIMATE_APPROVED->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("PARTS_PENDING->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("PARTS_ORDERED->CANCELLED", async (tx, ctx) => {
+  await releaseBookingAllocations(tx, ctx.booking.id);
+});
+registerEffect("PARTS_READY->CANCELLED", async (tx, ctx) => {
   await releaseBookingAllocations(tx, ctx.booking.id);
 });
 

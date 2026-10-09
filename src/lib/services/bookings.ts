@@ -3,11 +3,17 @@ import {
   NotFoundError,
   ValidationError,
   ForbiddenError,
+  InvalidTransitionError,
 } from "@/lib/errors";
+import { requireMembership } from "@/lib/tenancy/membership";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { signJwt } from "@/lib/auth/jwt";
 import { claimSlotCapacity } from "./slots";
-import type { CreateBookingRequest } from "@/lib/contracts/booking";
+import type {
+  CreateBookingRequest,
+  BookingFilterQuery,
+} from "@/lib/contracts/booking";
+import type { Prisma } from "@/generated/prisma/client";
 import type { AuthUser } from "@/lib/auth/types";
 
 export async function createCustomerBooking(data: CreateBookingRequest) {
@@ -287,3 +293,200 @@ export async function getCustomerBookingById(customerId: string, bookingId: stri
 
   return booking;
 }
+
+export async function getShopBookings(
+  actor: AuthUser,
+  shopId: string,
+  filter?: BookingFilterQuery
+) {
+  requireMembership(actor, shopId, ["SERVICE_ADVISOR", "OWNER"]);
+
+  // Calculate status counts for the entire shop
+  const countsRaw = await db.booking.groupBy({
+    by: ["status"],
+    where: { shopId },
+    _count: { _all: true },
+  });
+
+  const counts: Record<string, number> = {
+    ALL: 0,
+  };
+
+  for (const group of countsRaw) {
+    counts[group.status] = group._count._all;
+    counts.ALL += group._count._all;
+  }
+
+  const where: Prisma.BookingWhereInput = {
+    shopId,
+    ...(filter?.status ? { status: filter.status } : {}),
+  };
+
+  const bookings = await db.booking.findMany({
+    where,
+    include: {
+      vehicle: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+      slot: true,
+      services: {
+        include: {
+          service: true,
+        },
+      },
+      estimate: {
+        include: {
+          items: true,
+        },
+      },
+      technician: {
+        select: { id: true, name: true, email: true },
+      },
+      partsPerson: {
+        select: { id: true, name: true, email: true },
+      },
+      qcInspector: {
+        select: { id: true, name: true, email: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return {
+    bookings,
+    counts,
+  };
+}
+
+export async function getShopBookingById(
+  actor: AuthUser,
+  shopId: string,
+  bookingId: string
+) {
+  requireMembership(actor, shopId, ["SERVICE_ADVISOR", "OWNER"]);
+
+  const booking = await db.booking.findFirst({
+    where: { id: bookingId, shopId },
+    include: {
+      vehicle: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+      slot: true,
+      services: {
+        include: {
+          service: true,
+        },
+      },
+      estimate: {
+        include: {
+          items: true,
+        },
+      },
+      history: {
+        include: {
+          actor: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+      technician: {
+        select: { id: true, name: true, email: true, phone: true },
+      },
+      partsPerson: {
+        select: { id: true, name: true, email: true, phone: true },
+      },
+      qcInspector: {
+        select: { id: true, name: true, email: true, phone: true },
+      },
+      shop: {
+        select: { id: true, name: true, city: true, address: true, phone: true },
+      },
+    },
+  });
+
+  if (!booking) {
+    throw new NotFoundError("Booking not found in this shop");
+  }
+
+  return booking;
+}
+
+export async function notifyBookingReady(
+  actor: AuthUser,
+  shopId: string,
+  bookingId: string
+) {
+  requireMembership(actor, shopId, ["SERVICE_ADVISOR", "OWNER"]);
+
+  return db.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, shopId },
+      include: {
+        vehicle: true,
+        customer: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundError("Booking not found in this shop");
+    }
+
+    if (booking.status !== "READY_FOR_PICKUP") {
+      throw new InvalidTransitionError(
+        `Cannot notify customer when booking is in ${booking.status} status. Status must be READY_FOR_PICKUP.`
+      );
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: booking.id },
+      data: {
+        readyNotifiedAt: new Date(),
+      },
+      include: {
+        vehicle: true,
+        customer: {
+          select: { id: true, name: true, email: true, phone: true },
+        },
+        estimate: true,
+      },
+    });
+
+    // Create notification in the same transaction
+    await tx.notification.create({
+      data: {
+        userId: booking.customerId,
+        shopId: booking.shopId,
+        bookingId: booking.id,
+        type: "STATUS_READY_FOR_PICKUP",
+        message: `Your vehicle (${booking.vehicle.make} ${booking.vehicle.model} - ${booking.vehicle.regNo}) is ready for pickup!`,
+      },
+    });
+
+    // Create history entry
+    await tx.bookingHistory.create({
+      data: {
+        bookingId: booking.id,
+        fromStatus: "READY_FOR_PICKUP",
+        toStatus: "READY_FOR_PICKUP",
+        actorId: actor.id,
+        note: "Customer notified vehicle is ready for pickup",
+      },
+    });
+
+    return updated;
+  });
+}
+
