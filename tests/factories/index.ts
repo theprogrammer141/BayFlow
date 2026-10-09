@@ -93,10 +93,13 @@ export async function createVehicle(
     mileage: number;
   }> = {}
 ) {
+  counter += 1;
   return db.vehicle.create({
     data: {
       ownerId,
-      regNo: overrides.regNo ?? uniqueId("ABC").substring(0, 10).toUpperCase(),
+      regNo:
+        overrides.regNo ??
+        `REG${counter}${Math.random().toString(36).substring(2, 6)}`.toUpperCase(),
       make: overrides.make ?? "Honda",
       model: overrides.model ?? "Civic",
       year: overrides.year ?? 2021,
