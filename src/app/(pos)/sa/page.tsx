@@ -141,6 +141,11 @@ export default function SaDashboardPage() {
             setActiveShopName(
               (prev) => prev || (eligible[0].shop?.name ?? `Shop ${eligible[0].shopId.slice(-6)}`)
             );
+          } else {
+            setActiveShopId(null);
+            setActiveShopName("");
+            setShopsList([]);
+            setIsLoading(false);
           }
         }
       } catch {
@@ -199,6 +204,18 @@ export default function SaDashboardPage() {
     setRefreshIndex((i) => i + 1);
   };
 
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await apiClient("/api/auth/logout", { method: "POST" });
+    } finally {
+      setUser(null);
+      setActiveShopId(null);
+      setBookings([]);
+      setAuthVersion((v) => v + 1);
+    }
+  };
+
   // Quick Staff Login handler
   const handleQuickLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,6 +223,12 @@ export default function SaDashboardPage() {
     setLoginError(null);
 
     try {
+      try {
+        await apiClient("/api/auth/logout", { method: "POST" });
+      } catch {
+        // ignore logout error
+      }
+
       await apiClient("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({
@@ -371,8 +394,12 @@ export default function SaDashboardPage() {
     });
   }, [bookings, searchQuery]);
 
-  // Unauthenticated Staff View
-  if (!user && !isLoading) {
+  // Gate: Unauthenticated OR non-SA user
+  const hasSaRole = Boolean(
+    user?.memberships.some((m) => (m.role === "SERVICE_ADVISOR" || m.role === "OWNER") && m.isActive)
+  );
+
+  if ((!user || !hasSaRole) && !isLoading) {
     return (
       <div className="max-w-md mx-auto my-12 p-6 rounded-2xl border border-border bg-card shadow-sm space-y-5">
         <div className="text-center space-y-1.5">
@@ -386,6 +413,15 @@ export default function SaDashboardPage() {
             Sign in with authorized workshop credentials to manage customer bookings and repair intake.
           </p>
         </div>
+
+        {user && !hasSaRole && (
+          <div className="flex items-center gap-2 p-3 text-xs text-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>
+              Signed in as <strong>{user.name}</strong> ({user.email}). A Service Advisor or Owner role is required.
+            </span>
+          </div>
+        )}
 
         {loginError && (
           <div className="flex items-center gap-2 p-3 text-xs text-rose-700 bg-rose-50 dark:bg-rose-950/30 rounded-lg border border-rose-200 dark:border-rose-900">
@@ -614,6 +650,23 @@ export default function SaDashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {user && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs">
+              <Users className="size-3.5 text-primary shrink-0" />
+              <span className="font-semibold text-foreground">{user.name}</span>
+              <span className="text-[10px] text-muted-foreground font-mono">({user.email})</span>
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-transform"
+          >
+            Sign Out
+          </Button>
+
           {shopsList.length > 1 ? (
             <div className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
               <Building2 className="size-4 text-muted-foreground" />
