@@ -12,6 +12,8 @@ import {
 import type { BookingStatus, ActorRole } from "@/lib/contracts/common";
 import type { AuthUser } from "@/lib/auth/types";
 import type { Booking, BookingHistory } from "@/generated/prisma/client";
+import "@/lib/state/effects";
+import "@/lib/state/effects/parts";
 
 export interface TransitionBookingParams {
   bookingId: string;
@@ -35,7 +37,21 @@ export async function transitionBooking({
   note,
   payload,
 }: TransitionBookingParams): Promise<TransitionBookingResult> {
-  return db.$transaction(async (tx) => {
+  return db.$transaction((tx) =>
+    transitionBookingInTransaction(tx, { bookingId, to, actor, note, payload })
+  );
+}
+
+export async function transitionBookingInTransaction(
+  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  {
+    bookingId,
+    to,
+    actor,
+    note,
+    payload,
+  }: TransitionBookingParams
+): Promise<TransitionBookingResult> {
     // 1. Load booking with related records needed for guards and effects
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
@@ -180,54 +196,25 @@ export async function transitionBooking({
           break;
         }
 
-        case "ATOMIC_FIRST_PICKER_ONLY": {
-          const pickResult = await tx.booking.updateMany({
-            where: {
-              id: booking.id,
-              shopId: booking.shopId,
-              status: "QC_PENDING",
-            },
-            data: {
-              qcInspectorId: actor.id,
-            },
-          });
-          if (pickResult.count === 0) {
-            throw new ConflictError(
-              "Booking is no longer available in the QC queue"
-            );
-          }
-          booking.qcInspectorId = actor.id;
+        case "HAS_PARTS_SHORTAGE_AND_PO_CREATED":
+        case "EVERY_REQUIRED_PART_IN_STOCK":
+        case "ALL_PO_ITEMS_FULLY_RECEIVED":
+        case "STOCK_SUFFICIENT":
           break;
-        }
-
-        case "ASSIGNED_QC_INSPECTOR_ONLY": {
-          if (!booking.qcInspectorId || booking.qcInspectorId !== actor.id) {
-            throw new ForbiddenError(
-              "Action permitted only for the assigned QC inspector"
-            );
-          }
-          break;
-        }
-
-        case "ASSIGNED_QC_AND_QC_ISSUE_REQUIRED": {
-          if (!booking.qcInspectorId || booking.qcInspectorId !== actor.id) {
-            throw new ForbiddenError(
-              "Action permitted only for the assigned QC inspector"
-            );
-          }
-          const title = (payload?.title as string | undefined)?.trim();
-          const description = (payload?.description as string | undefined)?.trim();
-          if (!title || !description) {
-            throw new ValidationError(
-              "Issue title and description are required for QC return"
-            );
-          }
-          break;
-        }
       }
     }
 
     // 5. Apply registered transition effect
+    if (from === "PARTS_READY" && to === "IN_REPAIR") {
+      const claimed = await tx.booking.updateMany({
+        where: { id: booking.id, status: "PARTS_READY" },
+        data: { status: to },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError("Booking is no longer ready for parts allocation");
+      }
+    }
+
     const effectKey = `${from}->${to}`;
     const effect = getEffect(effectKey);
     if (effect) {
@@ -266,11 +253,10 @@ export async function transitionBooking({
       actor,
     });
 
-    return {
-      booking: updatedBooking,
-      history,
-      from,
-      to,
-    };
-  });
+  return {
+    booking: updatedBooking,
+    history,
+    from,
+    to,
+  };
 }
