@@ -39,7 +39,7 @@ const DEMO_PRESETS = [
   { role: "Customer", email: "customer@bayflow.demo", target: "/customer", icon: Wrench },
 ];
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectParam = searchParams.get("redirect");
@@ -205,3 +205,20 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default function LoginPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center p-4">
+          <div className="text-center text-xs text-muted-foreground">
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <LoginFormContent />
+    </React.Suspense>
+  );
+}
+
