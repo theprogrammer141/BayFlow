@@ -1,33 +1,15 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type { Booking, BookingService, Estimate, EstimateItem, Allocation } from "@/generated/prisma/client";
-import type { AuthUser } from "@/lib/auth/types";
 import { ValidationError } from "@/lib/errors";
+import {
+  registerEffect,
+  getEffect,
+  type EffectContext,
+  type EffectFn,
+} from "./registry";
 
-export interface EffectContext {
-  booking: Booking & {
-    services?: BookingService[];
-    estimate?: (Estimate & { items: EstimateItem[] }) | null;
-    allocations?: Allocation[];
-  };
-  actor: AuthUser;
-  note?: string;
-  payload?: Record<string, unknown>;
-}
+export { registerEffect, getEffect };
+export type { EffectContext, EffectFn };
 
-export type EffectFn = (
-  tx: Prisma.TransactionClient,
-  ctx: EffectContext
-) => Promise<void> | void;
-
-const effectsRegistry = new Map<string, EffectFn>();
-
-export function registerEffect(key: string, fn: EffectFn): void {
-  effectsRegistry.set(key, fn);
-}
-
-export function getEffect(key: string): EffectFn | undefined {
-  return effectsRegistry.get(key);
-}
 
 /**
  * Idempotent release of allocated parts back to stock on cancellation.
@@ -240,28 +222,6 @@ registerEffect("ESTIMATE_APPROVED->PARTS_PENDING", async (tx, ctx) => {
   }
 });
 
-// Row 13b: QC_IN_PROGRESS -> IN_REPAIR (Clear qcInspectorId, persist QcIssue)
-registerEffect("QC_IN_PROGRESS->IN_REPAIR", async (tx, ctx) => {
-  const title = (ctx.payload?.title as string) || "QC Inspection Failed";
-  const description =
-    (ctx.payload?.description as string) ||
-    (ctx.note ?? "Issues identified during quality inspection");
-
-  await tx.qcIssue.create({
-    data: {
-      bookingId: ctx.booking.id,
-      raisedById: ctx.actor.id,
-      title,
-      description,
-    },
-  });
-
-  await tx.booking.update({
-    where: { id: ctx.booking.id },
-    data: { qcInspectorId: null },
-  });
-});
-
 // Row 14: READY_FOR_PICKUP -> COMPLETED (Set completedAt)
 registerEffect("READY_FOR_PICKUP->COMPLETED", async (tx, ctx) => {
   await tx.booking.update({
@@ -269,3 +229,11 @@ registerEffect("READY_FOR_PICKUP->COMPLETED", async (tx, ctx) => {
     data: { completedAt: new Date() },
   });
 });
+
+// Import parts effects module to register rows 8a, 8b, 9, 10
+import "./parts";
+export { releaseAllocations } from "./parts";
+
+// Import QC effects module to register QC transitions
+import "./qc";
+

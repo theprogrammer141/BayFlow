@@ -7,6 +7,7 @@ import {
   ForbiddenError,
   NotFoundError,
   ValidationError,
+  ConflictError,
 } from "@/lib/errors";
 import type { BookingStatus, ActorRole } from "@/lib/contracts/common";
 import type { AuthUser } from "@/lib/auth/types";
@@ -179,8 +180,37 @@ export async function transitionBooking({
           break;
         }
 
+        case "ATOMIC_FIRST_PICKER_ONLY": {
+          const pickResult = await tx.booking.updateMany({
+            where: {
+              id: booking.id,
+              shopId: booking.shopId,
+              status: "QC_PENDING",
+            },
+            data: {
+              qcInspectorId: actor.id,
+            },
+          });
+          if (pickResult.count === 0) {
+            throw new ConflictError(
+              "Booking is no longer available in the QC queue"
+            );
+          }
+          booking.qcInspectorId = actor.id;
+          break;
+        }
+
+        case "ASSIGNED_QC_INSPECTOR_ONLY": {
+          if (!booking.qcInspectorId || booking.qcInspectorId !== actor.id) {
+            throw new ForbiddenError(
+              "Action permitted only for the assigned QC inspector"
+            );
+          }
+          break;
+        }
+
         case "ASSIGNED_QC_AND_QC_ISSUE_REQUIRED": {
-          if (booking.qcInspectorId && booking.qcInspectorId !== actor.id) {
+          if (!booking.qcInspectorId || booking.qcInspectorId !== actor.id) {
             throw new ForbiddenError(
               "Action permitted only for the assigned QC inspector"
             );
