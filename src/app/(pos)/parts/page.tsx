@@ -83,6 +83,12 @@ export default function PartsDashboardPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [feedbackNotice, setFeedbackNotice] = React.useState<string | null>(null);
 
+  // Quick login fallback states
+  const [loginEmail, setLoginEmail] = React.useState("parts@bayflow.demo");
+  const [loginPassword, setLoginPassword] = React.useState("password123");
+  const [isLoggingIn, setIsLoggingIn] = React.useState(false);
+  const [loginError, setLoginError] = React.useState<string | null>(null);
+
   // Modals
   const [isAddPartOpen, setIsAddPartOpen] = React.useState(false);
   const [adjustPart, setAdjustPart] = React.useState<Part | null>(null);
@@ -214,6 +220,40 @@ export default function PartsDashboardPage() {
     }
   }
 
+  // Quick Login Handler
+  async function handleQuickLogin(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      setIsLoggingIn(true);
+      setLoginError(null);
+      await apiClient("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const meData = await apiClient<MeResponse>("/api/auth/me");
+      setUser(meData.user);
+      const activeMemberships = meData.user.memberships.filter((m) => m.isActive);
+      const list = activeMemberships.map((m) => ({
+        id: m.shopId,
+        name: m.shop?.name || `Shop #${m.shopId.slice(-4)}`,
+      }));
+      setShopsList(list);
+      if (list.length > 0) {
+        setActiveShopId(list[0].id);
+        setActiveShopName(list[0].name);
+      }
+      triggerRefresh();
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        setLoginError(err.message);
+      } else {
+        setLoginError("Invalid credentials");
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
   // Filtered Parts Catalog
   const filteredParts = React.useMemo(() => {
     return parts.filter((part) => {
@@ -342,6 +382,70 @@ export default function PartsDashboardPage() {
           <RefreshCw className="size-6 animate-spin text-primary" />
           <p className="text-xs text-muted-foreground">Loading parts inventory and work orders...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-md my-12 p-6 rounded-2xl border border-border/80 bg-card shadow-xs space-y-5">
+        <div className="text-center space-y-1">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md mb-2">
+            <Package className="size-6" />
+          </div>
+          <h2 className="text-lg font-bold tracking-tight text-foreground">
+            Parts Person Sign In
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Sign in to access shop inventory, purchase orders, and allocation.
+          </p>
+        </div>
+
+        {loginError && (
+          <div className="flex items-center gap-2 p-3 text-xs text-rose-700 bg-rose-50 dark:bg-rose-950/30 rounded-lg border border-rose-200 dark:border-rose-900">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>{loginError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleQuickLogin} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">Email</label>
+            <Input
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              className="text-xs"
+              required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">Password</label>
+            <Input
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              className="text-xs"
+              required
+            />
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full text-xs font-semibold gap-1.5"
+            disabled={isLoggingIn}
+          >
+            {isLoggingIn ? "Signing in..." : "Sign in to Parts Dashboard"}
+          </Button>
+
+          <div className="pt-2 border-t border-border/60 text-center">
+            <p className="text-[11px] text-muted-foreground">
+              Demo credentials: <span className="font-mono text-foreground">parts@bayflow.demo</span> /{" "}
+              <span className="font-mono text-foreground">password123</span>
+            </p>
+          </div>
+        </form>
       </div>
     );
   }
