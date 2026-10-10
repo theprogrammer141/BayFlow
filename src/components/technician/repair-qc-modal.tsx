@@ -217,6 +217,36 @@ export function RepairQcModal({
               </p>
             </div>
 
+            {/* Approved Estimate Scope */}
+            {booking.estimate && booking.estimate.items && booking.estimate.items.length > 0 && (
+              <div className="p-3.5 rounded-xl border border-border bg-card space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Approved Repair Items (Rev #{booking.estimate.revision})
+                  </span>
+                  <span className="font-mono text-xs font-bold text-primary">
+                    Total: PKR {booking.estimate.total.toLocaleString()}
+                  </span>
+                </div>
+                <div className="divide-y divide-border/60 rounded-lg border border-border/80 overflow-hidden bg-background">
+                  {booking.estimate.items.map((item, i) => (
+                    <div key={item.id ?? i} className="p-2 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-muted text-foreground">
+                          {item.type}
+                        </span>
+                        <span className="font-medium text-foreground">{item.name}</span>
+                        <span className="text-muted-foreground">x{item.quantity}</span>
+                      </div>
+                      <span className="font-mono text-foreground font-semibold">
+                        PKR {(item.quantity * item.unitCost).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Ready for QC input and submission */}
             {booking.status === "IN_REPAIR" && (
               <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
