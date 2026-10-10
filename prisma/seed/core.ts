@@ -152,7 +152,7 @@ export async function seedCore(prisma: PrismaClient) {
     },
   });
 
-  const vehicle2 = await prisma.vehicle.create({
+  await prisma.vehicle.create({
     data: {
       id: "veh_demo_civic",
       ownerId: customer1.id,
@@ -191,7 +191,7 @@ export async function seedCore(prisma: PrismaClient) {
     },
   });
 
-  const vehicle5 = await prisma.vehicle.create({
+  await prisma.vehicle.create({
     data: {
       id: "veh_demo_tucson",
       ownerId: customer4.id,
@@ -383,41 +383,7 @@ export async function seedCore(prisma: PrismaClient) {
     ],
   });
 
-  // 9. Inventory Parts for shop_demo_001
-  const partBrakePads = await prisma.part.create({
-    data: {
-      shopId: shop1.id,
-      sku: "BP-FRONT-CERAMIC",
-      name: "Front Ceramic Brake Pads (OEM)",
-      quantity: 35,
-      reorderLevel: 5,
-      cost: 3500,
-    },
-  });
-
-  const partOil = await prisma.part.create({
-    data: {
-      shopId: shop1.id,
-      sku: "OIL-5W30-SYN",
-      name: "Synthetic Motor Oil 5W-30 4L",
-      quantity: 50,
-      reorderLevel: 10,
-      cost: 4800,
-    },
-  });
-
-  const partFilter = await prisma.part.create({
-    data: {
-      shopId: shop1.id,
-      sku: "FLT-OIL-GEN",
-      name: "OEM Engine Oil Filter",
-      quantity: 45,
-      reorderLevel: 10,
-      cost: 1200,
-    },
-  });
-
-  // 10. Available Slots (today and upcoming 7 days)
+  // 9. Available Slots (today and upcoming 7 days)
   console.log("🌱 Materializing slots for scheduling...");
   const slotHours = [9, 10, 11, 12, 14, 15, 16, 17];
   const createdSlotsShop1: Array<{ id: string; startsAt: Date }> = [];
@@ -441,7 +407,6 @@ export async function seedCore(prisma: PrismaClient) {
       });
       createdSlotsShop1.push(s1);
 
-      // Also create slots for shop 2 and shop 3
       await prisma.slot.create({
         data: {
           shopId: shop2.id,
@@ -462,7 +427,7 @@ export async function seedCore(prisma: PrismaClient) {
     }
   }
 
-  // 11. Pre-seeded Bookings in shop_demo_001 across key statuses
+  // 10. Pre-seeded Bookings in shop_demo_001 across key statuses
   console.log("🌱 Creating demo bookings for SA dashboard...");
 
   // Booking 1: PENDING (Ali Khan / Swift)
@@ -580,174 +545,5 @@ export async function seedCore(prisma: PrismaClient) {
     ],
   });
 
-  // Booking 4: ESTIMATE_REVIEW (Zainab Bibi / Tucson)
-  const slotReview = createdSlotsShop1[3];
-  await prisma.slot.update({ where: { id: slotReview.id }, data: { booked: { increment: 1 } } });
-  const bReview = await prisma.booking.create({
-    data: {
-      id: "book_demo_est_review",
-      shopId: shop1.id,
-      customerId: customer4.id,
-      vehicleId: vehicle5.id,
-      slotId: slotReview.id,
-      status: "ESTIMATE_REVIEW",
-      technicianId: tech.id,
-      customerNotes: "Inspection completed, estimate prepared by technician.",
-    },
-  });
-  const estReview = await prisma.estimate.create({
-    data: {
-      bookingId: bReview.id,
-      revision: 1,
-      total: 9000,
-      sentAt: null,
-    },
-  });
-  await prisma.estimateItem.createMany({
-    data: [
-      {
-        estimateId: estReview.id,
-        type: "PART",
-        partId: partBrakePads.id,
-        name: "Front Ceramic Brake Pads",
-        quantity: 2,
-        unitCost: 3500,
-      },
-      {
-        estimateId: estReview.id,
-        type: "LABOUR",
-        name: "Brake Caliper Servicing Labour",
-        quantity: 1,
-        unitCost: 2000,
-      },
-    ],
-  });
-
-  // Booking 5: AWAITING_CUSTOMER (Demo Customer / Civic)
-  const slotAwaiting = createdSlotsShop1[4];
-  await prisma.slot.update({ where: { id: slotAwaiting.id }, data: { booked: { increment: 1 } } });
-  const bAwaiting = await prisma.booking.create({
-    data: {
-      id: "book_demo_awaiting",
-      shopId: shop1.id,
-      customerId: customer1.id,
-      vehicleId: vehicle2.id,
-      slotId: slotAwaiting.id,
-      status: "AWAITING_CUSTOMER",
-      technicianId: tech.id,
-      customerNotes: "Oil change and full synthetic fluid upgrade.",
-    },
-  });
-  const estAwaiting = await prisma.estimate.create({
-    data: {
-      bookingId: bAwaiting.id,
-      revision: 1,
-      total: 8000,
-      sentAt: new Date(),
-    },
-  });
-  await prisma.estimateItem.createMany({
-    data: [
-      {
-        estimateId: estAwaiting.id,
-        type: "PART",
-        partId: partOil.id,
-        name: "Synthetic Motor Oil 5W-30 4L",
-        quantity: 1,
-        unitCost: 4800,
-      },
-      {
-        estimateId: estAwaiting.id,
-        type: "PART",
-        partId: partFilter.id,
-        name: "OEM Engine Oil Filter",
-        quantity: 1,
-        unitCost: 1200,
-      },
-      {
-        estimateId: estAwaiting.id,
-        type: "LABOUR",
-        name: "Oil Replacement & Chassis Lube",
-        quantity: 1,
-        unitCost: 2000,
-      },
-    ],
-  });
-
-  // Booking 6: ESTIMATE_REJECTED (Ali Khan / Swift)
-  const slotRejected = createdSlotsShop1[5];
-  await prisma.slot.update({ where: { id: slotRejected.id }, data: { booked: { increment: 1 } } });
-  const bRejected = await prisma.booking.create({
-    data: {
-      id: "book_demo_est_rejected",
-      shopId: shop1.id,
-      customerId: customer2.id,
-      vehicleId: vehicle3.id,
-      slotId: slotRejected.id,
-      status: "ESTIMATE_REJECTED",
-      technicianId: tech.id,
-      customerNotes: "Customer declined high quotation.",
-    },
-  });
-  await prisma.estimate.create({
-    data: {
-      bookingId: bRejected.id,
-      revision: 1,
-      total: 22000,
-      sentAt: new Date(Date.now() - 3600000),
-      rejectedAt: new Date(),
-    },
-  });
-
-  // Booking 7: PARTS_PENDING (Usman Tariq / Sportage)
-  const slotParts = createdSlotsShop1[6];
-  await prisma.slot.update({ where: { id: slotParts.id }, data: { booked: { increment: 1 } } });
-  await prisma.booking.create({
-    data: {
-      id: "book_demo_parts_pending",
-      shopId: shop1.id,
-      customerId: customer3.id,
-      vehicleId: vehicle4.id,
-      slotId: slotParts.id,
-      status: "PARTS_PENDING",
-      technicianId: tech.id,
-      customerNotes: "Approved estimate, awaiting parts clerk dispatch.",
-    },
-  });
-
-  // Booking 8: READY_FOR_PICKUP (Demo Customer / Corolla)
-  const slotReady = createdSlotsShop1[7];
-  await prisma.slot.update({ where: { id: slotReady.id }, data: { booked: { increment: 1 } } });
-  await prisma.booking.create({
-    data: {
-      id: "book_demo_ready",
-      shopId: shop1.id,
-      customerId: customer1.id,
-      vehicleId: vehicle1.id,
-      slotId: slotReady.id,
-      status: "READY_FOR_PICKUP",
-      technicianId: tech.id,
-      readyNotifiedAt: null, // Ready for SA to click Notify Ready!
-      customerNotes: "All repairs complete, ready for customer handover.",
-    },
-  });
-
-  // Booking 9: COMPLETED (Zainab Bibi / Tucson)
-  const slotComp = createdSlotsShop1[8];
-  await prisma.slot.update({ where: { id: slotComp.id }, data: { booked: { increment: 1 } } });
-  await prisma.booking.create({
-    data: {
-      id: "book_demo_completed",
-      shopId: shop1.id,
-      customerId: customer4.id,
-      vehicleId: vehicle5.id,
-      slotId: slotComp.id,
-      status: "COMPLETED",
-      technicianId: tech.id,
-      completedAt: new Date(),
-      customerNotes: "Completed vehicle service, customer satisfied.",
-    },
-  });
-
-  console.log("✅ Core database seed completed with 3 official shops and rich SA demo bookings!");
+  console.log("✅ Core database seed completed with 3 official shops!");
 }

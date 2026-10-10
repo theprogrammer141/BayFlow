@@ -240,6 +240,28 @@ registerEffect("ESTIMATE_APPROVED->PARTS_PENDING", async (tx, ctx) => {
   }
 });
 
+// Row 13b: QC_IN_PROGRESS -> IN_REPAIR (Clear qcInspectorId, persist QcIssue)
+registerEffect("QC_IN_PROGRESS->IN_REPAIR", async (tx, ctx) => {
+  const title = (ctx.payload?.title as string) || "QC Inspection Failed";
+  const description =
+    (ctx.payload?.description as string) ||
+    (ctx.note ?? "Issues identified during quality inspection");
+
+  await tx.qcIssue.create({
+    data: {
+      bookingId: ctx.booking.id,
+      raisedById: ctx.actor.id,
+      title,
+      description,
+    },
+  });
+
+  await tx.booking.update({
+    where: { id: ctx.booking.id },
+    data: { qcInspectorId: null },
+  });
+});
+
 // Row 14: READY_FOR_PICKUP -> COMPLETED (Set completedAt)
 registerEffect("READY_FOR_PICKUP->COMPLETED", async (tx, ctx) => {
   await tx.booking.update({
