@@ -25,6 +25,14 @@ export async function getPublicShops(query: PublicShopsQuery): Promise<PublicSho
     });
   }
 
+  // Prevent automated test runner artifacts from leaking into public discovery
+  conditions.push({
+    NOT: [
+      { name: { startsWith: "Shop name_" } },
+      { name: { contains: "_179" } },
+    ],
+  });
+
   const shops = await db.shop.findMany({
     where: conditions.length > 0 ? { AND: conditions } : {},
     select: {

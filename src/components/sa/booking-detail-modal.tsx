@@ -85,6 +85,19 @@ export interface FullBookingDetail {
   } | null;
   technician?: { id: string; name: string; email: string } | null;
   partsPerson?: { id: string; name: string; email: string } | null;
+  qcIssues?: Array<{
+    id: string;
+    bookingId: string;
+    raisedById: string;
+    title: string;
+    description: string;
+    createdAt: string;
+    raisedBy?: {
+      id: string;
+      name: string;
+      email: string;
+    } | null;
+  }>;
   history?: Array<{
     id: string;
     fromStatus?: BookingStatus | null;

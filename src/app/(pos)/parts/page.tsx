@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Package, Search, Truck, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api-client";
