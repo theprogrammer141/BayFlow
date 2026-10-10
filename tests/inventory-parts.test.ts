@@ -18,6 +18,7 @@ import {
   receivePurchaseOrder,
 } from "@/lib/services/purchase-orders";
 import { transitionBooking } from "@/lib/services/booking-state";
+import { getShopBookings } from "@/lib/services/bookings";
 import { releaseAllocations } from "@/lib/state/effects/parts";
 import { db } from "@/lib/db";
 import {
@@ -382,7 +383,14 @@ describe("Phase 06 — Inventory, Purchase Orders and Parts Management Integrati
       ForbiddenError
     );
 
-    // 3. Technician cannot create or mutate parts
+    // 3. Parts staff in Shop A can query Shop A bookings, but not Shop B bookings
+    const bookingsA = await getShopBookings(authPartsA, shopA.id);
+    expect(bookingsA.bookings).toBeDefined();
+    await expect(getShopBookings(authPartsA, shopB.id)).rejects.toThrow(
+      ForbiddenError
+    );
+
+    // 4. Technician cannot create or mutate parts
     await expect(
       createPart(authTechA, shopA.id, {
         sku: "TECH-PART-01",

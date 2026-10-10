@@ -303,6 +303,8 @@ export async function getShopBookings(
     "SERVICE_ADVISOR",
     "OWNER",
     "TECHNICIAN",
+    "PARTS_PERSON",
+    "QC_INSPECTOR",
   ]);
 
   const isTechnician = membership.role === "TECHNICIAN";
@@ -393,6 +395,8 @@ export async function getShopBookingById(
     "SERVICE_ADVISOR",
     "OWNER",
     "TECHNICIAN",
+    "PARTS_PERSON",
+    "QC_INSPECTOR",
   ]);
 
   const booking = await db.booking.findFirst({
