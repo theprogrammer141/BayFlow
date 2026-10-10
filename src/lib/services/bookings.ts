@@ -299,12 +299,23 @@ export async function getShopBookings(
   shopId: string,
   filter?: BookingFilterQuery
 ) {
-  requireMembership(actor, shopId, ["SERVICE_ADVISOR", "OWNER"]);
+  const membership = requireMembership(actor, shopId, [
+    "SERVICE_ADVISOR",
+    "OWNER",
+    "TECHNICIAN",
+  ]);
 
-  // Calculate status counts for the entire shop
+  const isTechnician = membership.role === "TECHNICIAN";
+
+  // Calculate status counts for the shop (scoped to technician if caller is TECHNICIAN)
+  const countWhere: Prisma.BookingWhereInput = {
+    shopId,
+    ...(isTechnician ? { technicianId: actor.id } : {}),
+  };
+
   const countsRaw = await db.booking.groupBy({
     by: ["status"],
-    where: { shopId },
+    where: countWhere,
     _count: { _all: true },
   });
 
@@ -320,6 +331,7 @@ export async function getShopBookings(
   const where: Prisma.BookingWhereInput = {
     shopId,
     ...(filter?.status ? { status: filter.status } : {}),
+    ...(isTechnician ? { technicianId: actor.id } : {}),
   };
 
   const bookings = await db.booking.findMany({
@@ -345,6 +357,14 @@ export async function getShopBookings(
           items: true,
         },
       },
+      qcIssues: {
+        include: {
+          raisedBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
       technician: {
         select: { id: true, name: true, email: true },
       },
@@ -369,7 +389,11 @@ export async function getShopBookingById(
   shopId: string,
   bookingId: string
 ) {
-  requireMembership(actor, shopId, ["SERVICE_ADVISOR", "OWNER"]);
+  const membership = requireMembership(actor, shopId, [
+    "SERVICE_ADVISOR",
+    "OWNER",
+    "TECHNICIAN",
+  ]);
 
   const booking = await db.booking.findFirst({
     where: { id: bookingId, shopId },
@@ -402,6 +426,14 @@ export async function getShopBookingById(
         },
         orderBy: { createdAt: "asc" },
       },
+      qcIssues: {
+        include: {
+          raisedBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
       technician: {
         select: { id: true, name: true, email: true, phone: true },
       },
@@ -419,6 +451,13 @@ export async function getShopBookingById(
 
   if (!booking) {
     throw new NotFoundError("Booking not found in this shop");
+  }
+
+  // Assignment is an authorization boundary for technicians
+  if (membership.role === "TECHNICIAN" && booking.technicianId !== actor.id) {
+    throw new ForbiddenError(
+      "Not authorized to view another technician's booking"
+    );
   }
 
   return booking;

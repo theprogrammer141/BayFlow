@@ -178,6 +178,22 @@ export async function transitionBooking({
           }
           break;
         }
+
+        case "ASSIGNED_QC_AND_QC_ISSUE_REQUIRED": {
+          if (booking.qcInspectorId && booking.qcInspectorId !== actor.id) {
+            throw new ForbiddenError(
+              "Action permitted only for the assigned QC inspector"
+            );
+          }
+          const title = (payload?.title as string | undefined)?.trim();
+          const description = (payload?.description as string | undefined)?.trim();
+          if (!title || !description) {
+            throw new ValidationError(
+              "Issue title and description are required for QC return"
+            );
+          }
+          break;
+        }
       }
     }
 
