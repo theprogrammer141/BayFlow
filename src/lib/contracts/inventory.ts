@@ -10,7 +10,7 @@ export const CreatePartRequestSchema = z.object({
 });
 export type CreatePartRequest = z.infer<typeof CreatePartRequestSchema>;
 
-export const UpdatePartRequestSchema = CreatePartRequestSchema.omit({ quantity: true }).partial();
+export const UpdatePartRequestSchema = CreatePartRequestSchema.partial();
 export type UpdatePartRequest = z.infer<typeof UpdatePartRequestSchema>;
 
 export const PartSchema = z.object({
